@@ -1,0 +1,5 @@
+{
+  "name": "Gestor de Dívidas",
+  "description": "Aplicativo para controle financeiro pessoal, permitindo o gerenciamento e acompanhamento de dívidas e parcelamentos.",
+  "requestFramePermissions": []
+}
