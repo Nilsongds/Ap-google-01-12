@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Debt } from './types';
-import { Plus, LayoutDashboard, WalletCards, Bell, X } from 'lucide-react';
+import { Plus, LayoutDashboard, WalletCards, Bell, X, ArrowUpDown } from 'lucide-react';
 import DebtCard from './components/DebtCard';
 import DebtForm from './components/DebtForm';
 import Summary from './components/Summary';
 import ChartsSection from './components/ChartsSection';
 import Modal from './components/Modal';
-import { formatCurrency, formatDate } from './utils/formatters';
+import { formatCurrency, formatDate, getDebtStatus } from './utils/formatters';
 
 const App: React.FC = () => {
   const [debts, setDebts] = useState<Debt[]>(() => {
@@ -24,6 +24,10 @@ const App: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | undefined>(undefined);
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+  
+  // Sorting State
+  const [sortField, setSortField] = useState<'nextDueDate' | 'totalValue' | 'status' | 'description'>('nextDueDate');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     localStorage.setItem('debt-tracker-data', JSON.stringify(debts));
@@ -73,6 +77,10 @@ const App: React.FC = () => {
     setDismissedAlerts(prev => [...prev, id]);
   };
 
+  const toggleSortDirection = () => {
+    setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
   // Calculate notifications
   const notifications = useMemo(() => {
     const today = new Date();
@@ -106,6 +114,36 @@ const App: React.FC = () => {
       };
     });
   }, [debts, dismissedAlerts]);
+
+  // Sorted Debts Logic
+  const sortedDebts = useMemo(() => {
+    return [...debts].sort((a, b) => {
+      let result = 0;
+      
+      switch (sortField) {
+        case 'totalValue':
+          result = a.totalValue - b.totalValue;
+          break;
+        case 'nextDueDate':
+          result = new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime();
+          break;
+        case 'status':
+          // Priority: Atrasada (0) < Em dia (1) < Quitada (2)
+          const priority = { 'Atrasada': 0, 'Em dia': 1, 'Quitada': 2 };
+          const statusA = getDebtStatus(a);
+          const statusB = getDebtStatus(b);
+          result = priority[statusA] - priority[statusB];
+          break;
+        case 'description':
+           result = a.description.localeCompare(b.description);
+           break;
+        default:
+          result = 0;
+      }
+
+      return sortDirection === 'asc' ? result : -result;
+    });
+  }, [debts, sortField, sortDirection]);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans pb-12">
@@ -184,11 +222,35 @@ const App: React.FC = () => {
 
         {/* Debt List */}
         <section>
-           <div className="flex items-center justify-between mb-4">
+           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-4">
             <h2 className="text-lg font-semibold text-slate-800">Minhas Dívidas ({debts.length})</h2>
+            
+            {debts.length > 0 && (
+              <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                <span className="text-xs font-medium text-slate-500 pl-2 hidden sm:inline">Ordenar por:</span>
+                <select 
+                  value={sortField}
+                  onChange={(e) => setSortField(e.target.value as any)}
+                  className="text-sm border-none bg-transparent py-1.5 pl-1 pr-6 focus:ring-0 text-slate-700 font-medium cursor-pointer outline-none"
+                >
+                  <option value="nextDueDate">Vencimento</option>
+                  <option value="totalValue">Valor Total</option>
+                  <option value="status">Status</option>
+                  <option value="description">Nome</option>
+                </select>
+                <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                <button 
+                  onClick={toggleSortDirection}
+                  className="p-1.5 hover:bg-slate-100 rounded-md text-slate-600 transition-colors"
+                  title={sortDirection === 'asc' ? "Crescente" : "Decrescente"}
+                >
+                  <ArrowUpDown className={`w-4 h-4 transition-transform ${sortDirection === 'desc' ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            )}
           </div>
           
-          {debts.length === 0 ? (
+          {sortedDebts.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
               <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-4">
                 <WalletCards className="w-8 h-8" />
@@ -206,7 +268,7 @@ const App: React.FC = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {debts.map((debt) => (
+              {sortedDebts.map((debt) => (
                 <DebtCard
                   key={debt.id}
                   debt={debt}
